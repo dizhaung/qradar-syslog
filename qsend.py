@@ -10,21 +10,65 @@ import subprocess
 import time
 import socket
 
-__author__ = "Lu-Chi"
 
-logger = logging.getLogger()
-handler = logging.StreamHandler()
+# -------------------
+# TODOs:
+# -----
+# import ConfigParser       - move all ardcodings into the separate ini/xml/csv file
+# import pprint             - for better term coloring/presentation
+# import re                 - for regexp, testing user arguments
+# import setuptools         - for build/install purposes
+# import pdb                - just in case any debug stuff needed
+# import threading          \
+# import multiprocessing     > yep... would be nice... one day... and asyncio
+# import Qeueue             /
+# -------------------
+
+
+__author__ = "Lu-Chi"
+__copyright__ = "Copyright (C) 2016 Lu-Chi"
+__license__ = "Public Domain"
+__version__ = "1.0 RC1"
+
+
+
+logging.basicConfig(
+    filename='qradar_syslog_msg.log',
+    level=logging.INFO,
+    format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
+    dateftm='%H:%M:%S'
+)
+
+
+console = logging.getLogger("qsend")
+console.setLevel(logging.INFO)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('<%(asctime)s> <%(levelname)s> : %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+ch.setFormatter(formatter)
+console.addHandler(ch)
+
+
+# a class overload for logging module
+# class setLogger(logging):
+#    pass
+
+
+# stdlib ConfigParser overload
+# class getConfig(ConfigParser):
+ #   pass
 
 
 class QSendString(object):
-    ''''class to prepare and send the string to remote host '''
+    """
+    class to prepare and send the string to remote host
+    """
 
     def __init__(self, name, uname, comm, esd, ip, port):
-        ''' conctructor - initial data out of the user arguments '''
+        """
+        constructor - initial data out of the user arguments
+        """
 
         self.name = name
         self.uname = uname
@@ -36,7 +80,9 @@ class QSendString(object):
 
 
     def setString(self):
-        ''' prepare the string based on initial arguments '''
+        """
+        prepare the string based on initial arguments
+        """
 
         self.pstr = "{} someUniqueSyslogHost\n".format(self.datime)
         self.pstr += "LEEF:2.0|"
@@ -54,87 +100,92 @@ class QSendString(object):
 
 
     def sendString(self):
-        ''' send prepared string towards dedicated host via netcat '''
+        """
+        send prepared string towards dedicated host via netcat
+        """
 
         self.cmd = u"echo \"{}\" | nc {} {} -vvvv".format(self.setString(), self.ip, self.port)
-        logger.info("[*] Calling the shell.")
+        console.info("Calling the shell.")
         try:
             subprocess.call(self.cmd, shell=True)
         except:
-            logger.info("[!] The connection couldn't be established.")
+            console.error("The connection couldn't be established.")
             sys.exit()
 
 
     def sendRawSocketData(self):
-        ''' send the message using raw socket '''
+        """
+        send the message using raw socket
+        """
 
-        logger.info("[*] Creating a socket...")
+        console.info("Creating a socket...")
 
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error:
-            logger.info("[!] Failed to create socket.")
+            console.error("Failed to create a socket.")
             sys.exit()
 
-        logger.info("[+] Socket created.")
-        logger.info("[*] Connecting host: [{}:{}]".format(self.ip, self.port))
+        console.info("Socket created.")
+        console.info("Connecting to: [{}:{}]...".format(self.ip, self.port))
 
         try:
-            self.remote = socket.gethostbyname(self.ip)
+            self.remote = socket.gethostbyname(self.ip) # watta' matta'... do I really need this sh..t here?
             self.s.connect((self.ip, self.port))
-        except socket.gaierror:
-            logger.info("[!] Hostname could not be resolved. Exiting...")
+        except socket.error:
+            console.error("Connection could not be established. Exiting.")
             sys.exit()
 
-        logger.info("[+] Connection to [{}:{}] established.".format(self.ip, self.port))
-        logger.info("[*] Sending a message...")
+        console.info("Connection to: [{}:{}] established.".format(self.ip, self.port))
+        console.info("Sending a message...")
 
         try:
             self.s.send(self.setString().encode('utf-8'))
-            logger.info("[+] Message sent successfully")
+            console.info("Message sent successfully.")
         except socket.error:
-            logger.info("[!] Message coud not be sent: {}".format(socket.error))
+            console.error("Message coud not be sent: {}.")
             self.s.close()
             sys.exit()
 
         self.s.close()
-
-
+        console.info("Socket closed.")
+        # so many tries & no throws or raise? hmm... Interesting...
 
 
 
 # main function
+# sorry guys, it's just a C beneath the remains...
 
 def main():
 
+    # yeah, hardcoded stuff. Better than nothing...
+    # oh, wait - what'bout ini?
 
-    ip = "10.207.7.10"
-    port = 514
+    ip = "127.0.0.1"
+    port = 8000
     usr = os.getlogin()
 
-    logger.info("[*] Getting user arguments.")
+    console.info("Getting user arguments.")
 
     parser = argparse.ArgumentParser(description="Send syslog message to the remote server.")
 
-    parser.add_argument('-n', '--name', help="the log message", action='store', required=True)
+    parser.add_argument('-n', '--name', help="the log message", action='store', required=True, type=str)
     parser.add_argument('-c','--comment', help="a comment of at least 15 characters", action='store', required=True, type=str)
     parser.add_argument('-e','--esd',help="an ESD ticket number", action='store', required=True, type=int)
     parser.add_argument('-H', '--host', help="host ip", action='store', default=ip, required=False, type=str)
-    parser.add_argument('-p','--port', help="host port number", action='store', default=port, required=False, type=str)
-    parser.add_argument('-v', '--version', action='store', required=False)
+    parser.add_argument('-p','--port', help="host port number", action='store', default=port, required=False, type=int)
+    parser.add_argument('-v', '--version', action='version', version="[%(prog)s] - Send a syslog message to the remote server - version 1.0 RC1")
 
     args = parser.parse_args()
 
-    logger.info("[*] Initializing the object instance.")
+    console.info("Initializing the object instance.")
     qstr = QSendString(args.name, usr, args.comment, args.esd, args.host, args.port)
-
-    logger.info("[*] Sending the string.")
-    #qstr.sendString()
     qstr.sendRawSocketData()
 
 
 
 # check if module
+# is it? really?
 
 if __name__ == '__main__':
     main()
@@ -142,6 +193,7 @@ if __name__ == '__main__':
 
 
 # some necessary stuff to consider
-# xc2a6 delimit char = "¦"
+# --------------------------------
+# xc2a6 delimit char = "¦" - freaki' hell with utf-8. Keep in mind the top under shebang.
 # os.getlogin()
 # qsend.py -n "some name" -c "Any comment" -e 12345
